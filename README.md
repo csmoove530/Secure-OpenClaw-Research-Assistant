@@ -1,6 +1,12 @@
 # Secure OpenClaw Research Assistant
 
-Run OpenClaw as a **read-only research assistant** in maximum isolation mode.
+Run OpenClaw as a **read-only research assistant** in maximum isolation mode with **persistent memory** for learning your preferences.
+
+## New in v2.0
+- **Persistent Memory Skill** - Agent remembers your feedback across sessions
+- **Secrets moved to env vars** - No tokens stored in JSON config files
+- **Read-only filesystem** - Container root is immutable
+- **ClawdStrike integration** - Security audit tool included
 
 ```bash
 # Quick start (after cloning this repo)
@@ -189,6 +195,26 @@ This configuration has two types of controls:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Secrets Management
+
+**All secrets are stored in environment variables, NOT in JSON config files.**
+
+| Secret | Location | Notes |
+|--------|----------|-------|
+| `ANTHROPIC_API_KEY` | `.env` | Required for Claude |
+| `TELEGRAM_BOT_TOKEN` | `.env` | From @BotFather |
+| `OPENCLAW_GATEWAY_TOKEN` | `.env` | Auth token |
+| `RESEND_API_KEY` | `.env` | Optional: email |
+| `BRAVE_API_KEY` | `.env` | Optional: web search |
+
+The `openclaw.json` config file contains **no secrets** - safe to share or commit.
+
+```bash
+# Verify no secrets in config
+grep -E "(token|key|password|secret)" ~/.openclaw/openclaw.json
+# Should return nothing sensitive
+```
+
 ### What the Hardened Compose Adds
 
 The `docker-compose.hardened.yml` overlay adds protections missing from upstream:
@@ -198,10 +224,11 @@ The `docker-compose.hardened.yml` overlay adds protections missing from upstream
 | `no-new-privileges` | Prevents setuid/setgid privilege escalation |
 | `seccomp` profile | Filters dangerous syscalls at kernel level |
 | `cpu` limits | Prevents DoS via CPU exhaustion (1 core max) |
-| `memory` limits | Prevents DoS via memory exhaustion (512MB max) |
+| `memory` limits | Prevents DoS via memory exhaustion (2GB max) |
 | `read_only: true` | Immutable root filesystem |
 | `tmpfs` with noexec | Writable temp dirs can't execute code |
-| `pids_limit` | Prevents fork bombs |
+| `pids_limit` | Prevents fork bombs (256 max) |
+| Env var secrets | No tokens in config files |
 
 ---
 
@@ -212,6 +239,32 @@ The `docker-compose.hardened.yml` overlay adds protections missing from upstream
 - Summarize and analyze text
 - Answer questions
 - Draft responses for your review
+- **Learn and remember your preferences** (via memory skill)
+
+### Persistent Memory Skill
+
+The agent includes a **remember-feedback** skill that saves your preferences across sessions.
+
+**Trigger phrases:**
+- "Remember that..."
+- "Going forward..."
+- "From now on..."
+- "I prefer..."
+- "Quick feedback:"
+
+**Example:**
+```
+You: "Going forward, always use bullet points instead of paragraphs"
+Agent: "Got it! I've saved this preference. I'll use bullet points going forward."
+```
+
+Preferences are stored in `~/.openclaw/agents/main/agent/soul.md` and persist across restarts.
+
+**Categories:**
+- Writing Style Guidelines
+- Data & Dashboard Preferences
+- Things to Avoid
+- General Preferences
 
 ### What It Cannot Do
 
@@ -295,13 +348,16 @@ deploy:
 This repo:
 ├── docker-compose.hardened.yml  # Security overlay (IMPORTANT)
 ├── config/
-│   ├── openclaw.json            # Main config
-│   ├── env.template             # Secrets template
+│   ├── openclaw.json            # Main config (no secrets!)
+│   ├── env.example              # Secrets template (copy to .env)
 │   └── seccomp-profile.json     # Syscall filter (optional)
+├── skills/
+│   └── remember-feedback/
+│       └── SKILL.md             # Persistent memory skill
 ├── agents/
 │   └── research-agent/
 │       └── agent/
-│           └── soul.md          # Agent behavioral guidance
+│           └── soul.md          # Agent behavioral guidance + learned preferences
 └── scripts/
     ├── setup.sh                 # Automated setup
     ├── kill-agent.sh            # Emergency stop
@@ -309,14 +365,19 @@ This repo:
 
 After setup:
 ~/.openclaw/
-├── openclaw.json                # Your config (with real token)
-├── .env                         # Your secrets (chmod 600)
-└── agents/...
+├── openclaw.json                # Your config (no hardcoded secrets)
+├── .env                         # Your secrets (chmod 600) - NEVER COMMIT
+├── skills/
+│   └── remember-feedback/       # Memory skill
+└── agents/
+    └── main/
+        └── agent/
+            └── soul.md          # Learned preferences persisted here
 
 ~/openclaw-sandbox/openclaw/
 ├── docker-compose.yml           # Upstream compose
 ├── docker-compose.hardened.yml  # Copied hardening overlay
-└── ...
+└── .env                         # Secrets for docker compose
 ```
 
 ---
@@ -373,6 +434,41 @@ docker compose -f docker-compose.yml -f docker-compose.hardened.yml up -d
 ```
 
 </details>
+
+---
+
+## Security Auditing with ClawdStrike
+
+This setup includes integration with [ClawdStrike](https://www.clawdstrike.ai/), a security audit tool from Cantina.
+
+### Install ClawdStrike Skill
+
+```bash
+cd ~/.openclaw/skills
+git clone https://github.com/cantinaxyz/clawdstrike.git
+```
+
+### Run Security Audit
+
+```bash
+cd ~/.openclaw/skills/clawdstrike
+bash scripts/collect_verified.sh
+```
+
+This generates a `verified-bundle.json` with security findings. The skill checks:
+- Gateway exposure and authentication
+- Discovery/mDNS leaks
+- Channel policies
+- Filesystem permissions
+- Skills supply chain
+- Secrets on disk
+
+### Audit Report
+
+After running the collector, ask the agent via Telegram:
+```
+Run ClawdStrike security audit and show me the report
+```
 
 ---
 

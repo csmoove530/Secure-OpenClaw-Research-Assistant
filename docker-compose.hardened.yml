@@ -9,13 +9,25 @@
 services:
   openclaw-gateway:
     # ============================================
+    # ENVIRONMENT - API Keys
+    # ============================================
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENCLAW_MODEL: "claude-opus-4-5-20251101"
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      BRAVE_API_KEY: ${BRAVE_API_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      NODE_OPTIONS: "--max-old-space-size=1536"
+
+    # ============================================
     # RESOURCE LIMITS - Prevent DoS
     # ============================================
     deploy:
       resources:
         limits:
           cpus: '1.0'           # Max 1 CPU core
-          memory: 512M          # Max 512MB RAM
+          memory: 2048M         # Max 2GB RAM
+          pids: 256             # Prevent fork bombs
         reservations:
           cpus: '0.25'          # Guaranteed 0.25 CPU
           memory: 128M          # Guaranteed 128MB RAM
@@ -45,10 +57,10 @@ services:
     # ============================================
     # FILESYSTEM RESTRICTIONS
     # ============================================
-    read_only: true             # Read-only root filesystem
+    read_only: true             # Re-enabled for security
     tmpfs:
-      - /tmp:size=64M,noexec,nosuid,nodev
-      - /home/node/.cache:size=64M,noexec,nosuid,nodev
+      - /tmp:size=128M,noexec,nosuid,nodev
+      - /home/node/.npm:size=64M
 
     # ============================================
     # NETWORK ISOLATION
@@ -56,11 +68,6 @@ services:
     # The upstream binds to ports; we restrict to loopback via config
     # For maximum isolation, uncomment:
     # network_mode: "none"
-
-    # ============================================
-    # PROCESS LIMITS
-    # ============================================
-    pids_limit: 256             # Prevent fork bombs
 
     # ============================================
     # ADDITIONAL HARDENING
@@ -83,9 +90,9 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64M,noexec,nosuid,nodev
-    pids_limit: 64
     deploy:
       resources:
         limits:
           cpus: '0.5'
           memory: 256M
+          pids: 64
