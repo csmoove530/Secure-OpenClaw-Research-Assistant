@@ -4,14 +4,48 @@
   },
   "agents": {
     "defaults": {
+      "memorySearch": {
+        "provider": "gemini",
+        "remote": {
+          "apiKey": "${GEMINI_API_KEY}"
+        },
+        "model": "gemini-embedding-001"
+      },
       "compaction": {
         "mode": "safeguard"
       },
       "maxConcurrent": 4,
       "subagents": {
-        "maxConcurrent": 8
+        "maxConcurrent": 8,
+        "model": "anthropic/claude-sonnet-4-20250514"
+      },
+      "sandbox": {
+        "mode": "off"
       }
-    }
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "Research Assistant",
+        "subagents": {
+          "allowAgents": [
+            "deep-research"
+          ]
+        }
+      },
+      {
+        "id": "deep-research",
+        "name": "Deep Research (Opus)",
+        "agentDir": "agents/deep-research",
+        "model": {
+          "primary": "anthropic/claude-opus-4-5-20251101"
+        }
+      }
+    ]
+  },
+  "messages": {
+    "ackReactionScope": "group-mentions"
   },
   "commands": {
     "native": "auto",
@@ -19,12 +53,23 @@
   },
   "channels": {
     "telegram": {
+      "enabled": true,
       "dmPolicy": "allowlist",
       "allowFrom": [],
-      "groupPolicy": "allowlist",
       "groupAllowFrom": [],
-      "streamMode": "partial",
-      "enabled": true
+      "groupPolicy": "allowlist",
+      "streamMode": "partial"
+    },
+    "discord": {
+      "enabled": true,
+      "allowBots": false,
+      "groupPolicy": "allowlist",
+      "dmPolicy": "allowlist",
+      "allowFrom": [],
+      "dm": {
+        "enabled": true
+      },
+      "guilds": {}
     }
   },
   "discovery": {
@@ -40,12 +85,32 @@
       "mode": "token"
     }
   },
-  "messages": {
-    "ackReactionScope": "group-mentions"
+  "tools": {
+    "deny": [
+      "apply_patch",
+      "gateway",
+      "cron",
+      "sessions_spawn",
+      "sessions_send"
+    ],
+    "elevated": {
+      "enabled": false
+    },
+    "fs": {
+      "workspaceOnly": true
+    },
+    "exec": {
+      "security": "full",
+      "ask": "off",
+      "host": "gateway"
+    }
   },
   "plugins": {
     "entries": {
       "telegram": {
+        "enabled": true
+      },
+      "discord": {
         "enabled": true
       }
     }

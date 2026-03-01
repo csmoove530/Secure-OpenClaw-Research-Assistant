@@ -1,8 +1,16 @@
 # Secure OpenClaw Research Assistant
 
-Run OpenClaw as a **read-only research assistant** in maximum isolation mode with **persistent memory** for learning your preferences.
+Run OpenClaw as a **secure research assistant** with **VISAclaw security hardening**, maximum container isolation, and **persistent memory** for learning your preferences.
 
-## New in v2.0
+## New in v3.0 - VISAclaw Security Upgrade
+- **Default-deny seccomp profile** - Blocks dangerous syscalls (ptrace, mount, bpf, etc.)
+- **Discord + Telegram support** - Multi-channel communication
+- **GitHub push capability** - Agent can push code to repos (optional)
+- **Enhanced tool restrictions** - Deny list for dangerous tools, workspace-only filesystem access
+- **Git config via environment** - Works with read-only filesystem
+- **CRITICAL FIX:** Actually uses seccomp profile (v2.0 had `seccomp:unconfined` which disabled protection!)
+
+## Previous in v2.0
 - **Persistent Memory Skill** - Agent remembers your feedback across sessions
 - **Secrets moved to env vars** - No tokens stored in JSON config files
 - **Read-only filesystem** - Container root is immutable
@@ -222,13 +230,18 @@ The `docker-compose.hardened.yml` overlay adds protections missing from upstream
 | Protection | What It Does |
 |------------|--------------|
 | `no-new-privileges` | Prevents setuid/setgid privilege escalation |
-| `seccomp` profile | Filters dangerous syscalls at kernel level |
+| `seccomp` profile | Filters dangerous syscalls at kernel level (~185 allowed, all others blocked) |
 | `cpu` limits | Prevents DoS via CPU exhaustion (1 core max) |
 | `memory` limits | Prevents DoS via memory exhaustion (2GB max) |
 | `read_only: true` | Immutable root filesystem |
-| `tmpfs` with noexec | Writable temp dirs can't execute code |
+| `tmpfs` with nosuid/nodev | Writable temp dirs can't create device files |
 | `pids_limit` | Prevents fork bombs (256 max) |
+| Tool deny list | Blocks dangerous tools: `apply_patch`, `gateway`, `cron`, `sessions_spawn`, `sessions_send` |
+| Workspace-only FS | Agent can only access `~/.openclaw/workspace`, not host filesystem |
+| Elevated tools disabled | No privilege escalation via tool system |
 | Env var secrets | No tokens in config files |
+
+**v3.0 Critical Fix:** Previous versions used `seccomp:unconfined` which **completely disabled** kernel-level syscall filtering. This is now fixed with an actual default-deny seccomp profile.
 
 ---
 

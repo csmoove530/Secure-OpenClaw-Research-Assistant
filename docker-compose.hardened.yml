@@ -1,10 +1,18 @@
 # Hardened Docker Compose for Secure OpenClaw
-# This file OVERRIDES the upstream compose with security hardening
+# Upgraded with VISAclaw security features
+#
+# Security improvements:
+# - Default-deny seccomp profile (blocks ptrace, mount, unshare, bpf, etc.)
+# - All capabilities dropped
+# - Read-only filesystem with limited tmpfs
+# - Resource limits (CPU, memory, PIDs)
+# - Non-root user
+#
+# Note: Docker sandbox mode is disabled (requires docker CLI in container)
+# Container-level hardening provides security instead.
 #
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.hardened.yml up -d
-#
-# Or copy to ~/openclaw-sandbox/openclaw/ and use as primary compose file
 
 services:
   openclaw-gateway:
@@ -14,10 +22,19 @@ services:
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       OPENCLAW_MODEL: "claude-opus-4-5-20251101"
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      BRAVE_API_KEY: ${BRAVE_API_KEY}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      BRAVE_API_KEY: ${BRAVE_API_KEY:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       NODE_OPTIONS: "--max-old-space-size=1536"
+      # GitHub token for agent to push code (optional)
+      GH_TOKEN: ${GH_TOKEN:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # Git configuration via environment (required for read-only filesystem)
+      GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME:-OpenClaw}
+      GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL:-openclaw@users.noreply.github.com}
+      GIT_COMMITTER_NAME: ${GIT_COMMITTER_NAME:-OpenClaw}
+      GIT_COMMITTER_EMAIL: ${GIT_COMMITTER_EMAIL:-openclaw@users.noreply.github.com}
 
     # ============================================
     # RESOURCE LIMITS - Prevent DoS
@@ -25,58 +42,46 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'           # Max 1 CPU core
-          memory: 2048M         # Max 2GB RAM
-          pids: 256             # Prevent fork bombs
+          cpus: '1.0'
+          memory: 2048M
+          pids: 256
         reservations:
-          cpus: '0.25'          # Guaranteed 0.25 CPU
-          memory: 128M          # Guaranteed 128MB RAM
+          cpus: '0.25'
+          memory: 128M
 
     # ============================================
-    # SECURITY OPTIONS - Privilege Escalation Prevention
+    # SECURITY OPTIONS - Default-deny seccomp
     # ============================================
     security_opt:
-      - no-new-privileges:true  # Prevent setuid/setgid escalation
-      - seccomp:unconfined      # Use default seccomp (or custom below)
-      # For custom seccomp profile, use:
-      # - seccomp:/path/to/seccomp-profile.json
+      - no-new-privileges:true
+      # CRITICAL: Use actual seccomp profile, NOT unconfined!
+      # seccomp:unconfined disables kernel-level syscall filtering
+      - seccomp=config/seccomp-profile.json
 
     # ============================================
     # CAPABILITY RESTRICTIONS
     # ============================================
     cap_drop:
-      - ALL                     # Drop all capabilities
-
-    # Do NOT add any cap_add - agent needs no special privileges
+      - ALL
 
     # ============================================
     # USER ISOLATION
     # ============================================
-    user: "1000:1000"           # Run as non-root user
+    user: "1000:1000"
 
     # ============================================
     # FILESYSTEM RESTRICTIONS
     # ============================================
-    read_only: true             # Re-enabled for security
+    read_only: true
     tmpfs:
-      - /tmp:size=128M,noexec,nosuid,nodev
+      - /tmp:size=128M,nosuid,nodev
       - /home/node/.npm:size=64M
-
-    # ============================================
-    # NETWORK ISOLATION
-    # ============================================
-    # The upstream binds to ports; we restrict to loopback via config
-    # For maximum isolation, uncomment:
-    # network_mode: "none"
+      - /home/node/.config/git:size=4M
 
     # ============================================
     # ADDITIONAL HARDENING
     # ============================================
-    # Prevent container from gaining new privileges
     privileged: false
-
-    # Don't allow ptrace (debugging)
-    # This is already blocked by dropping CAP_SYS_PTRACE
 
   # ============================================
   # CLI SERVICE - Same hardening
@@ -84,6 +89,7 @@ services:
   openclaw-cli:
     security_opt:
       - no-new-privileges:true
+      - seccomp=config/seccomp-profile.json
     cap_drop:
       - ALL
     user: "1000:1000"
