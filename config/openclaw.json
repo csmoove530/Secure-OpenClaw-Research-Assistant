@@ -20,7 +20,12 @@
         "model": "anthropic/claude-sonnet-4-20250514"
       },
       "sandbox": {
-        "mode": "off"
+        "mode": "all",
+        "workspaceAccess": "rw",
+        "docker": {
+          "readOnlyRoot": true,
+          "network": "none"
+        }
       }
     },
     "list": [
@@ -50,6 +55,9 @@
   "commands": {
     "native": "auto",
     "nativeSkills": "auto"
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
   },
   "channels": {
     "telegram": {
@@ -100,9 +108,9 @@
       "workspaceOnly": true
     },
     "exec": {
-      "security": "full",
+      "security": "allowlist",
       "ask": "off",
-      "host": "gateway"
+      "host": "sandbox"
     }
   },
   "plugins": {
