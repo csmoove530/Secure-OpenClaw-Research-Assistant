@@ -89,6 +89,10 @@ check $? "CPU limits configured"
 grep -q "memory:" ~/openclaw-sandbox/openclaw/docker-compose.hardened.yml 2>/dev/null
 check $? "Memory limits configured"
 
+# Check PID limits in hardened compose
+grep -q "pids:" ~/openclaw-sandbox/openclaw/docker-compose.hardened.yml 2>/dev/null
+check $? "PID limits configured (fork bomb prevention)"
+
 # Check read_only in hardened compose
 grep -q "read_only: true" ~/openclaw-sandbox/openclaw/docker-compose.hardened.yml 2>/dev/null
 check $? "Container read_only flag present"
@@ -147,6 +151,83 @@ check $? "Telegram DM policy is allowlist"
 # Check mDNS discovery is off
 grep -q '"mode": "off"' ~/.openclaw/openclaw.json 2>/dev/null
 check $? "mDNS discovery disabled"
+
+echo ""
+echo "=== Seccomp Profile Integrity ==="
+
+# Check seccomp profile exists in repo
+test -f config/seccomp-profile.json 2>/dev/null || test -f ~/openclaw-sandbox/openclaw/config/seccomp-profile.json 2>/dev/null
+check $? "Seccomp profile file exists"
+
+# Check seccomp is not unconfined in compose
+if [ -f ~/openclaw-sandbox/openclaw/docker-compose.hardened.yml ]; then
+    ! grep -q "seccomp:unconfined" ~/openclaw-sandbox/openclaw/docker-compose.hardened.yml 2>/dev/null
+    check $? "Seccomp is NOT set to unconfined"
+fi
+
+# Check seccomp default action is deny
+SECCOMP_FILE=""
+if [ -f config/seccomp-profile.json ]; then
+    SECCOMP_FILE="config/seccomp-profile.json"
+elif [ -f ~/openclaw-sandbox/openclaw/config/seccomp-profile.json ]; then
+    SECCOMP_FILE="$HOME/openclaw-sandbox/openclaw/config/seccomp-profile.json"
+fi
+
+if [ -n "$SECCOMP_FILE" ]; then
+    grep -q '"SCMP_ACT_ERRNO"' "$SECCOMP_FILE" 2>/dev/null
+    check $? "Seccomp default action is ERRNO (deny)"
+
+    # Check dangerous syscalls are blocked (not in allowlist)
+    ! grep -q '"ptrace"' "$SECCOMP_FILE" 2>/dev/null
+    check $? "ptrace syscall is blocked"
+
+    ! grep -q '"mount"' "$SECCOMP_FILE" 2>/dev/null
+    check $? "mount syscall is blocked"
+
+    ! grep -q '"unshare"' "$SECCOMP_FILE" 2>/dev/null
+    check $? "unshare syscall is blocked"
+
+    ! grep -q '"io_uring_setup"' "$SECCOMP_FILE" 2>/dev/null
+    check $? "io_uring syscalls are blocked"
+
+    ! grep -q '"execveat"' "$SECCOMP_FILE" 2>/dev/null
+    check $? "execveat syscall is blocked"
+
+    ! grep -q '"memfd_create"' "$SECCOMP_FILE" 2>/dev/null
+    check $? "memfd_create syscall is blocked"
+fi
+
+echo ""
+echo "=== Tool Controls ==="
+
+# Check deny list has critical entries
+grep -q '"apply_patch"' ~/.openclaw/openclaw.json 2>/dev/null
+check $? "apply_patch in tool deny list"
+
+grep -q '"sessions_spawn"' ~/.openclaw/openclaw.json 2>/dev/null
+check $? "sessions_spawn in tool deny list"
+
+grep -q '"sessions_send"' ~/.openclaw/openclaw.json 2>/dev/null
+check $? "sessions_send in tool deny list"
+
+# Check elevated tools are disabled
+grep -q '"elevated"' ~/.openclaw/openclaw.json 2>/dev/null && grep -q '"enabled": false' ~/.openclaw/openclaw.json 2>/dev/null
+check $? "Elevated tools disabled"
+
+echo ""
+echo "=== Secrets Management ==="
+
+# Check no hardcoded API keys in config
+if [ -f ~/.openclaw/openclaw.json ]; then
+    ! grep -qiE '(sk-ant-|sk-[a-zA-Z0-9]{20,}|xoxb-|xoxp-|ghp_|gho_|AKIA)' ~/.openclaw/openclaw.json 2>/dev/null
+    check $? "No hardcoded API keys in config file"
+fi
+
+# Check no hardcoded tokens in compose files
+if [ -f ~/openclaw-sandbox/openclaw/docker-compose.hardened.yml ]; then
+    ! grep -qiE '(sk-ant-|sk-[a-zA-Z0-9]{20,}|xoxb-|xoxp-|ghp_|gho_|AKIA)' ~/openclaw-sandbox/openclaw/docker-compose.hardened.yml 2>/dev/null
+    check $? "No hardcoded API keys in compose file"
+fi
 
 echo ""
 echo "================================================"
